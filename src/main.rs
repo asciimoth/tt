@@ -197,9 +197,20 @@ impl Mask{
         clone.invert();
         clone
     }
+    pub fn from_space<T>(space: &Space<T>) -> Self{
+        let mut ret = Mask::new(space.w, space.h);
+        for x in 0..space.w {
+            for y in 0..space.h {
+                if let Some(_) = space.space[y][x] {
+                    ret.space[y][x] = Some(())
+                }
+            }
+        }
+        ret
+    }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum Colors{
     Red,
     Green,
@@ -215,6 +226,17 @@ impl Colors{
             1 => Colors::Green,
             2 => Colors::Blue,
             _ => Colors::Yellow,
+        }
+    }
+}
+
+impl fmt::Debug for Colors {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self{
+            Colors::Red => { write!(f, "R") }
+            Colors::Green => { write!(f, "G") }
+            Colors::Blue => { write!(f, "B") }
+            Colors::Yellow => { write!(f, "Y") }
         }
     }
 }
@@ -245,55 +267,99 @@ impl ShapeType{
     }
 }
 
-fn main() {
-    let mut seed_max: u64 = 0;
-    let mut ln_max: usize = 0;
-    for seed in 0..u64::MAX {
-        let mut ln: usize = 0;
-        let mut rng = StdRng::seed_from_u64(seed);
-        loop{
-            let shape = ShapeType::get_random(&mut rng);
-            let color = Colors::get_random(&mut rng);
-            if let ShapeType::O = shape{
-                ln += 1;
-            }else{
-                break
+pub struct Shape{
+    shape: Space<Colors>,
+    mask: Mask,
+}
+
+impl Shape{
+    pub fn new(tp: ShapeType, color: Colors) -> Self{
+        let mut shape = Space::<Colors>::new(5,5);
+        match tp {
+            ShapeType::I => {
+                shape.set_no_err(2,1, Some(color));
+                shape.set_no_err(2,2, Some(color));
+                shape.set_no_err(2,3, Some(color));
+                shape.set_no_err(2,4, Some(color));
+            }
+            ShapeType::O => {
+                shape.set_no_err(2,2, Some(color));
+                shape.set_no_err(2,3, Some(color));
+                shape.set_no_err(3,2, Some(color));
+                shape.set_no_err(3,3, Some(color));
+            }
+            ShapeType::L => {
+                shape.set_no_err(2,1, Some(color));
+                shape.set_no_err(2,2, Some(color));
+                shape.set_no_err(2,3, Some(color));
+                shape.set_no_err(3,3, Some(color));
+            }
+            ShapeType::J => {
+                shape.set_no_err(2,1, Some(color));
+                shape.set_no_err(2,2, Some(color));
+                shape.set_no_err(2,3, Some(color));
+                shape.set_no_err(1,3, Some(color));
+            }
+            ShapeType::S => {
+                shape.set_no_err(2,1, Some(color));
+                shape.set_no_err(3,1, Some(color));
+                shape.set_no_err(1,2, Some(color));
+                shape.set_no_err(2,2, Some(color));
+            }
+            ShapeType::Z => {
+                shape.set_no_err(1,1, Some(color));
+                shape.set_no_err(2,1, Some(color));
+                shape.set_no_err(2,2, Some(color));
+                shape.set_no_err(3,2, Some(color));
+            }
+            ShapeType::T => {
+                shape.set_no_err(2,2, Some(color));
+                shape.set_no_err(1,3, Some(color));
+                shape.set_no_err(2,3, Some(color));
+                shape.set_no_err(3,3, Some(color));
             }
         }
-        if ln > ln_max {
-            ln_max = ln;
-            seed_max = seed;
-        }
-        println!("Iteration: {:?}", seed);
-        println!("Max: {:?} Seed: {:?} \n", ln_max, seed_max);
+        let mask = Mask::from_space(&shape);
+        Shape{shape, mask}
     }
-    /*let mut rng = StdRng::seed_from_u64(29563);
+}
+
+impl fmt::Debug for Shape {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut minx: usize = self.mask.w;
+        let mut maxx: usize = 0;
+        let mut miny: usize = self.mask.h;
+        let mut maxy: usize = 0;
+        for x in 0..self.mask.w {
+            for y in 0..self.mask.h {
+                if let Some(()) = self.mask.get_no_err(x,y){
+                    if x > maxx { maxx = x; }
+                    if x < minx { minx = x; }
+                    if y > maxy { maxy = y; }
+                    if y < miny { miny = y; }
+                }
+            }
+        }
+        for y in miny..maxy+1 {
+            for x in minx..maxx+1 {
+                if let Some(color) = self.shape.space[y][x] {
+                    write!(f, "{:?}", color)?;
+                }else{
+                    write!(f, " ")?;
+                }
+            }
+            write!(f, "\n")?;
+        }
+        Ok(())
+    }
+}
+
+fn main() {
+    let mut rng = StdRng::seed_from_u64(1);
     for _ in 0..10 {
-        println!("{:?}", ShapeType::get_random(&mut rng));
-    }*/
-    /*let mut space = Space::<()>::new_default(20, 11, Some(()));
-    println!("{:?}", space);
-    println!("{:?}", space.get_no_err(0,0));
-    for x in 0..30 {
-        if let Err(err) = space.set(x,0, None){
-            println!("Err '{}' when set {}, 0", err, x);
-            break
-        }
+        let shape_type = ShapeType::get_random(&mut rng);
+        let color = Colors::get_random(&mut rng);
+        let shape = Shape::new(shape_type, color);
+        println!("{:?}", shape);
     }
-    println!("{:?}", space);
-    let mut figure = Space::<()>::new_default(3, 4, None);
-    figure.set_no_err(1,1, Some(()));
-    figure.set_no_err(1,2, Some(()));
-    let mut mask = Space::<()>::new_default(3, 4, Some(()));
-    mask.set_no_err(0,3, None);
-    mask.set_no_err(1,3, None);
-    mask.set_no_err(2,3, None);
-    println!("{:?}{:?}", figure, mask);
-    println!("{:?}", figure == figure.clone());
-    println!("{:?}", space.copy_in(1,2, figure.clone()));
-    println!("{:?}", space.copy_in_with_mask(5,2, figure.clone(), mask.clone()));
-    println!("{:?}", space.copy_in_with_mask(9,2, figure.clone(), mask.get_invert()));
-    println!("{:?}", space);
-    println!("{:?}", space.get_rotated(Rotation::Clockwise, 1));
-    println!("{:?}", space.get_rotated(Rotation::Counterclockwise, 1));*/
 }
