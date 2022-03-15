@@ -1,8 +1,10 @@
 use std::fmt;
 use std::cmp::min;
+use rand::Rng;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-//#[allow(non_camel_case_types)]
 pub enum Rotation{
     Clockwise, // По часовой
     Counterclockwise, // Против часовой
@@ -197,8 +199,79 @@ impl Mask{
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Colors{
+    Red,
+    Green,
+    Blue,
+    Yellow,
+}
+
+impl Colors{
+    pub fn get_random<R: Rng + ?Sized>(rng: &mut R) -> Colors{
+        let rand = rng.gen_range(0..4);
+        match rand {
+            0 => Colors::Red,
+            1 => Colors::Green,
+            2 => Colors::Blue,
+            _ => Colors::Yellow,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ShapeType{
+    I,
+    O,
+    L,
+    J,
+    S,
+    Z,
+    T,
+}
+
+impl ShapeType{
+    pub fn get_random<R: Rng + ?Sized>(rng: &mut R) -> ShapeType{
+        let rand = rng.gen_range(0..7);
+        match rand{
+            0 => ShapeType::I,
+            1 => ShapeType::O,
+            2 => ShapeType::L,
+            3 => ShapeType::J,
+            4 => ShapeType::S,
+            5 => ShapeType::Z,
+            _ => ShapeType::T,
+        }
+    }
+}
+
 fn main() {
-    let mut space = Space::<()>::new_default(20, 11, Some(()));
+    let mut seed_max: u64 = 0;
+    let mut ln_max: usize = 0;
+    for seed in 0..u64::MAX {
+        let mut ln: usize = 0;
+        let mut rng = StdRng::seed_from_u64(seed);
+        loop{
+            let shape = ShapeType::get_random(&mut rng);
+            let color = Colors::get_random(&mut rng);
+            if let ShapeType::O = shape{
+                ln += 1;
+            }else{
+                break
+            }
+        }
+        if ln > ln_max {
+            ln_max = ln;
+            seed_max = seed;
+        }
+        println!("Iteration: {:?}", seed);
+        println!("Max: {:?} Seed: {:?} \n", ln_max, seed_max);
+    }
+    /*let mut rng = StdRng::seed_from_u64(29563);
+    for _ in 0..10 {
+        println!("{:?}", ShapeType::get_random(&mut rng));
+    }*/
+    /*let mut space = Space::<()>::new_default(20, 11, Some(()));
     println!("{:?}", space);
     println!("{:?}", space.get_no_err(0,0));
     for x in 0..30 {
@@ -222,5 +295,5 @@ fn main() {
     println!("{:?}", space.copy_in_with_mask(9,2, figure.clone(), mask.get_invert()));
     println!("{:?}", space);
     println!("{:?}", space.get_rotated(Rotation::Clockwise, 1));
-    println!("{:?}", space.get_rotated(Rotation::Counterclockwise, 1));
+    println!("{:?}", space.get_rotated(Rotation::Counterclockwise, 1));*/
 }
