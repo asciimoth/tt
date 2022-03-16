@@ -470,7 +470,7 @@ fn get_random_shape<R: Rng + ?Sized>(rng: &mut R, color: Colors) -> Desk {
     }
 }
 
-fn render<O: Write + ?Sized>(out: &mut O, desk: &Desk, x: usize, y: usize) -> crossterm::Result<()>{
+fn render<O: Write + ?Sized>(out: &mut O, desk: &Desk, x: usize, y: usize, extended: bool) -> crossterm::Result<()>{
     for row in 0..desk.get_height() {
         out.queue(cursor::MoveTo(x  as u16 ,(y+row) as u16 ))?;
         for symbol in 0..desk.get_width() {
@@ -484,10 +484,18 @@ fn render<O: Write + ?Sized>(out: &mut O, desk: &Desk, x: usize, y: usize) -> cr
                 if f {
                     out.queue(style::Print("██".with(color)))?;
                 }else{
-                    out.queue(style::Print("▒▒".with(color)))?;
+                    if extended {
+                        out.queue(style::Print("▒▒".with(color)))?;
+                    }else{
+                        out.queue(style::Print("██".with(color)))?;
+                    }
                 }
             }else{
-                out.queue(style::Print("░░"))?;
+                if extended {
+                    out.queue(style::Print("░░"))?;
+                }else{
+                    out.queue(style::Print("  "))?;
+                }
             }
         }
     }
@@ -495,14 +503,12 @@ fn render<O: Write + ?Sized>(out: &mut O, desk: &Desk, x: usize, y: usize) -> cr
 }
 
 fn main() {
-    let mut rng = StdRng::seed_from_u64(10);
+    let mut rng = StdRng::seed_from_u64(11);
     let color = Colors::get_random(&mut rng);
     let ax = rng.gen_range(0..4) ;
     let shape = get_random_shape(&mut rng, color).get_rotated(Rotation::Clockwise, ax);
     let mut desk = Desk::new(10,20);
-    desk.copy_in_with_bounds(3,3,shape);
-    let mut shape = Desk::new_default(10,2,Some((color, true)));
-    desk.copy_in_with_bounds(0,10,shape);
+    desk.copy_in_with_bounds(rng.gen_range(0..10),rng.gen_range(0..4),shape);
     //
     let mut stdout = stdout();
     stdout.execute(cursor::Hide).unwrap();
@@ -511,14 +517,13 @@ fn main() {
     for _ in 0..desk.get_height() {
         print!("\n");
     }
-    let d = Duration::from_millis(1);
+    let d = Duration::from_millis(50);
     //
     let mut max_score: u64 = 0;
     let mut score: u64 = 0;
     'outer: loop {
         while desk.step() {
-            //println!("{:?}\n{:?}", desk.get_content_heigth(), desk);
-            render(&mut stdout, &desk, x as usize, y as usize - desk.get_height()).unwrap();
+            render(&mut stdout, &desk, x as usize, y as usize - desk.get_height(), true).unwrap();
             stdout.queue(cursor::MoveTo(x+(desk.get_width()*2) as u16, y-desk.get_height() as u16)).unwrap();
             stdout.queue(style::Print(format!("score {:?}", score))).unwrap();
             stdout.queue(cursor::MoveTo(x+(desk.get_width()*2) as u16, y+1-desk.get_height() as u16)).unwrap();
