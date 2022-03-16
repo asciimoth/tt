@@ -4,6 +4,18 @@ use rand::Rng;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+use std::io::{stdout, Write};
+use crossterm::{
+    terminal,
+    ExecutableCommand, QueueableCommand,
+    cursor, style::{self, Stylize}, self
+};
+use crossterm::event::{poll, read, Event};
+
+use std::time::Duration;
+use std::thread::sleep;
+
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Rotation{
     Clockwise, // По часовой
@@ -30,8 +42,8 @@ impl<T> Space<T>{
         }
         Self{space, w, h}
     }
-    pub fn get_width(self) -> usize { self.w }
-    pub fn get_height(self) -> usize { self.h }
+    pub fn get_width(&self) -> usize { self.w }
+    pub fn get_height(&self) -> usize { self.h }
     pub fn set(&mut self, x: usize, y: usize, value: Option<T>) -> Result<(), &'static str> {
         if x >= self.w || y >= self.h {
             Err("Out of space")
@@ -58,7 +70,7 @@ impl<T> Space<T>{
         }
         Ok(())
     }
-    pub fn copy_in_with_bounds(&mut self, mut x: usize, mut y: usize, other: Space<T>) {
+    pub fn copy_in_with_bounds(&mut self, mut x: usize, mut y: usize, other: Space<T>) -> (usize, usize){
         if x+other.w > self.w{
             x -= (x+other.w)-self.w
         }
@@ -74,6 +86,7 @@ impl<T> Space<T>{
             }
             yc += 1;
         }
+        (x, y)
     }
     pub fn copy_in_with_mask(&mut self,  x: usize, y: usize, other: Space<T>, mask: Mask) -> Result<(), &'static str> {
         if other.w != mask.w {
@@ -258,17 +271,73 @@ impl fmt::Debug for Colors {
     }
 }
 
-pub type Desk = Space<Colors>;
+pub type Desk = Space<(Colors, bool)>;
 
 impl Desk {
     pub fn fall(&mut self) -> bool {
+        // Yeah, disgusting code
+        // But I'm writing this at 3 a.m. so it's acceptable
         let mut ret = false;
+        for x in 0..self.w {
+            if let Some((c, s)) = self.space[self.h-1][x]{
+                self.space[self.h-1][x] = Some((c, false))
+            }
+        }
+        // Fall shapes
         for y in (0..self.h-1).rev() {
+            let mut can_fall = true;
             for x in 0..self.w {
-                if let Some(_) = self.space[y][x]{
-                    if let None = self.space[y+1][x]{
-                        self.space[y+1][x] = self.space[y][x];
-                        self.space[y][x] = None;
+                if let Some((_, s)) = self.space[y][x]{
+                    if s {
+                        if let Some((_, s2)) = self.space[y+1][x]{
+                            if !s2{
+                                can_fall = false;
+                            }
+                        }
+                    }
+                }
+            }
+            if can_fall {
+                for x in 0..self.w {
+                    if let Some((_, s)) = self.space[y][x] {
+                        if s {
+                            if let None = self.space[y+1][x] {
+                                self.space[y+1][x] = self.space[y][x];
+                                self.space[y][x] = None;
+                                ret = true;
+                            }
+                        }
+                    }
+                }
+            }else{
+                for yy in y..self.h {
+                    for x in 0..self.w {
+                        if let Some((c, s)) = self.space[yy][x] {
+                            self.space[yy][x] = Some((c, false));
+                            if s && yy > y {
+                                self.space[yy-1][x] = self.space[yy][x];
+                                self.space[yy][x] = None;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if ret { return true }
+        // Fall all other
+        for y in (1..self.h).rev() {
+            let mut void = true;
+            for x in 0..self.w {
+                if let Some(_) = self.space[y][x] {
+                    void = false;
+                    break;
+                }
+            }
+            if void {
+                for x in 0..self.w {
+                    if let Some(_) = self.space[y-1][x] {
+                        self.space[y][x] = self.space[y-1][x];
+                        self.space[y-1][x] = None;
                         ret = true;
                     }
                 }
@@ -313,7 +382,7 @@ impl Desk {
 }
 
 fn get_i_shape(color: Colors) -> Desk {
-    let color = Some(color);
+    let color = Some((color, true));
     let mut shape = Desk::new(1,4);
     shape.set_no_err(0, 0, color);
     shape.set_no_err(0, 1, color);
@@ -323,7 +392,7 @@ fn get_i_shape(color: Colors) -> Desk {
 }
 
 fn get_o_shape(color: Colors) -> Desk {
-    let color = Some(color);
+    let color = Some((color, true));
     let mut shape = Desk::new(2,2);
     shape.set_no_err(0, 0, color);
     shape.set_no_err(0, 1, color);
@@ -333,7 +402,7 @@ fn get_o_shape(color: Colors) -> Desk {
 }
 
 fn get_l_shape(color: Colors) -> Desk {
-    let color = Some(color);
+    let color = Some((color, true));
     let mut shape = Desk::new(2,3);
     shape.set_no_err(0, 0, color);
     shape.set_no_err(0, 1, color);
@@ -343,7 +412,7 @@ fn get_l_shape(color: Colors) -> Desk {
 }
 
 fn get_j_shape(color: Colors) -> Desk {
-    let color = Some(color);
+    let color = Some((color, true));
     let mut shape = Desk::new(2,3);
     shape.set_no_err(1, 0, color);
     shape.set_no_err(1, 1, color);
@@ -353,7 +422,7 @@ fn get_j_shape(color: Colors) -> Desk {
 }
 
 fn get_s_shape(color: Colors) -> Desk {
-    let color = Some(color);
+    let color = Some((color, true));
     let mut shape = Desk::new(3,2);
     shape.set_no_err(0, 1, color);
     shape.set_no_err(1, 1, color);
@@ -363,7 +432,7 @@ fn get_s_shape(color: Colors) -> Desk {
 }
 
 fn get_z_shape(color: Colors) -> Desk {
-    let color = Some(color);
+    let color = Some((color, true));
     let mut shape = Desk::new(3,2);
     shape.set_no_err(2, 1, color);
     shape.set_no_err(1, 1, color);
@@ -373,7 +442,7 @@ fn get_z_shape(color: Colors) -> Desk {
 }
 
 fn get_t_shape(color: Colors) -> Desk {
-    let color = Some(color);
+    let color = Some((color, true));
     let mut shape = Desk::new(3,2);
     shape.set_no_err(2, 1, color);
     shape.set_no_err(1, 1, color);
@@ -394,17 +463,71 @@ fn get_random_shape<R: Rng + ?Sized>(rng: &mut R, color: Colors) -> Desk {
     }
 }
 
+fn render<O: Write + ?Sized>(out: &mut O, desk: &Desk, x: usize, y: usize) -> crossterm::Result<()>{
+    for row in 0..desk.get_height() {
+        out.queue(cursor::MoveTo(x  as u16 ,(y+row) as u16 ))?;
+        for symbol in 0..desk.get_width() {
+            if let Some((c, f)) = desk.get_no_err(symbol, row) {
+                let color = match c {
+                    Colors::Red => { style::Color::Red }
+                    Colors::Green => { style::Color::DarkGreen }
+                    Colors::Blue => { style::Color::Blue }
+                    Colors::Yellow => { style::Color::Yellow }
+                };
+                if f {
+                    out.queue(style::Print("██".with(color)))?;
+                }else{
+                    out.queue(style::Print("▒▒".with(color)))?;
+                }
+            }else{
+                out.queue(style::Print("░░"))?;
+            }
+        }
+    }
+    out.flush()?;
+    Ok(())
+}
+
 fn main() {
-    let mut rng = StdRng::seed_from_u64(5);
+    let mut rng = StdRng::seed_from_u64(10);
     let color = Colors::get_random(&mut rng);
     let ax = rng.gen_range(0..4) ;
     let shape = get_random_shape(&mut rng, color).get_rotated(Rotation::Clockwise, ax);
     let mut desk = Desk::new(10,20);
     desk.copy_in_with_bounds(3,3,shape);
-    let mut shape = Desk::new_default(10,2,Some(color));
+    let mut shape = Desk::new_default(10,2,Some((color, true)));
     desk.copy_in_with_bounds(0,10,shape);
-    println!("{:?}", desk);
-    while desk.step() {
-        println!("{:?}\n{:?}", desk.get_content_heigth(), desk);
+    //
+    let mut stdout = stdout();
+    stdout.execute(cursor::Hide).unwrap();
+    terminal::enable_raw_mode().unwrap();
+    let (x, y) = cursor::position().unwrap();
+    for _ in 0..desk.get_height() {
+        print!("\n");
     }
+    let d = Duration::from_millis(60);
+    //
+    'outer: loop {
+        while desk.step() {
+            //println!("{:?}\n{:?}", desk.get_content_heigth(), desk);
+            render(&mut stdout, &desk, x as usize, y as usize - desk.get_height()).unwrap();
+            if poll(d).unwrap() {
+                match read().unwrap() {
+                    Event::Key(_) => {break 'outer;}
+                    _ => {}
+                }
+            }
+        }
+        if desk.get_content_heigth() >= desk.get_height() {
+            desk = Desk::new(10,20);
+        }
+        let color = Colors::get_random(&mut rng);
+        let ax = rng.gen_range(0..4) ;
+        let shape = get_random_shape(&mut rng, color).get_rotated(Rotation::Clockwise, ax);
+        desk.copy_in_with_bounds(rng.gen_range(0..10),rng.gen_range(0..4),shape);
+    }
+    //
+    stdout.queue(cursor::MoveTo(x  as u16 ,y as u16 )).unwrap();
+    terminal::disable_raw_mode().unwrap();
+    stdout.execute(cursor::Show).unwrap();
 }
