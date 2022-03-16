@@ -381,6 +381,13 @@ impl Desk {
     }
 }
 
+fn get_b_shape(color: Colors) -> Desk {
+    let color = Some((color, true));
+    let mut shape = Desk::new(1,1);
+    shape.set_no_err(0, 0, color);
+    shape
+}
+
 fn get_i_shape(color: Colors) -> Desk {
     let color = Some((color, true));
     let mut shape = Desk::new(1,4);
@@ -484,7 +491,6 @@ fn render<O: Write + ?Sized>(out: &mut O, desk: &Desk, x: usize, y: usize) -> cr
             }
         }
     }
-    out.flush()?;
     Ok(())
 }
 
@@ -505,12 +511,19 @@ fn main() {
     for _ in 0..desk.get_height() {
         print!("\n");
     }
-    let d = Duration::from_millis(60);
+    let d = Duration::from_millis(1);
     //
+    let mut max_score: u64 = 0;
+    let mut score: u64 = 0;
     'outer: loop {
         while desk.step() {
             //println!("{:?}\n{:?}", desk.get_content_heigth(), desk);
             render(&mut stdout, &desk, x as usize, y as usize - desk.get_height()).unwrap();
+            stdout.queue(cursor::MoveTo(x+(desk.get_width()*2) as u16, y-desk.get_height() as u16)).unwrap();
+            stdout.queue(style::Print(format!("score {:?}", score))).unwrap();
+            stdout.queue(cursor::MoveTo(x+(desk.get_width()*2) as u16, y+1-desk.get_height() as u16)).unwrap();
+            stdout.queue(style::Print(format!("max   {:?}", max_score))).unwrap();
+            stdout.flush().unwrap();
             if poll(d).unwrap() {
                 match read().unwrap() {
                     Event::Key(_) => {break 'outer;}
@@ -520,10 +533,17 @@ fn main() {
         }
         if desk.get_content_heigth() >= desk.get_height() {
             desk = Desk::new(10,20);
+            score = 0;
+        }else{
+            score += 1;
+            if score > max_score {
+                max_score = score;
+            }
         }
         let color = Colors::get_random(&mut rng);
         let ax = rng.gen_range(0..4) ;
         let shape = get_random_shape(&mut rng, color).get_rotated(Rotation::Clockwise, ax);
+        //let shape = get_b_shape(color).get_rotated(Rotation::Clockwise, ax);
         desk.copy_in_with_bounds(rng.gen_range(0..10),rng.gen_range(0..4),shape);
     }
     //
