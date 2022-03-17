@@ -10,7 +10,7 @@ use crossterm::{
     ExecutableCommand, QueueableCommand,
     cursor, style::{self, Stylize}, self
 };
-use crossterm::event::{poll, read, Event};
+use crossterm::event::{poll, read, Event, KeyCode};
 
 use std::time::Duration;
 
@@ -502,6 +502,78 @@ fn render<O: Write + ?Sized>(out: &mut O, desk: &Desk, x: usize, y: usize, exten
 
 fn main() {
     let mut rng = StdRng::seed_from_u64(11);
+    let desk = Desk::new(10,10);
+    let duration = Duration::from_millis(100);
+    //
+    let mut stdout = stdout();
+    stdout.execute(cursor::Hide).unwrap();
+    terminal::enable_raw_mode().unwrap();
+    let (x, y) = cursor::position().unwrap();
+    for _ in 0..desk.get_height() { print!("\n"); }
+    //
+    'outer: loop {
+        let color = Colors::get_random(&mut rng);
+        let ax = rng.gen_range(0..4) ;
+        let mut shape = get_random_shape(&mut rng, color).get_rotated(Rotation::Clockwise, ax);
+        let (mut xx, mut yy) = (rng.gen_range(0..10),rng.gen_range(0..10));
+        let mut change = true;
+        loop{
+            if change {
+                let mut d = desk.clone();
+                let a = d.copy_in_with_bounds(xx, yy, shape.clone());
+                xx = a.0;
+                yy = a.1;
+                render(&mut stdout, &d, x as usize, y as usize - d.get_height(), true).unwrap();
+                stdout.flush().unwrap();
+                change = false;
+            }
+            if poll(duration).unwrap() {
+                match read().unwrap() {
+                    Event::Key(event) => {
+                        match event.code {
+                            KeyCode::Esc => { break 'outer; }
+                            KeyCode::Char(' ') => { break }
+                            KeyCode::Char('a') => {
+                                if xx > 0 {
+                                    xx -= 1;
+                                    change = true;
+                                }
+                            }
+                            KeyCode::Char('d') => {
+                                xx += 1;
+                                change = true;
+                            }
+                            KeyCode::Char('w') => {
+                                if yy > 0 {
+                                    yy -= 1;
+                                    change = true;
+                                }
+                            }
+                            KeyCode::Char('s') => {
+                                yy += 1;
+                                change = true;
+                            }
+                            KeyCode::Char('e') => {
+                                shape = shape.get_rotated(Rotation::Clockwise, 1);
+                                change = true;
+                            }
+                            KeyCode::Char('q') => {
+                                shape = shape.get_rotated(Rotation::Counterclockwise, 1);
+                                change = true;
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    //
+    stdout.queue(cursor::MoveTo(x  as u16 ,y as u16 )).unwrap();
+    terminal::disable_raw_mode().unwrap();
+    stdout.execute(cursor::Show).unwrap();
+    /*let mut rng = StdRng::seed_from_u64(11);
     let color = Colors::get_random(&mut rng);
     let ax = rng.gen_range(0..4) ;
     let shape = get_random_shape(&mut rng, color).get_rotated(Rotation::Clockwise, ax);
@@ -552,5 +624,5 @@ fn main() {
     //
     stdout.queue(cursor::MoveTo(x  as u16 ,y as u16 )).unwrap();
     terminal::disable_raw_mode().unwrap();
-    stdout.execute(cursor::Show).unwrap();
+    stdout.execute(cursor::Show).unwrap();*/
 }
