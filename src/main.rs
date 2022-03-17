@@ -13,7 +13,6 @@ use crossterm::{
 use crossterm::event::{poll, read, Event};
 
 use std::time::Duration;
-use std::thread::sleep;
 
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -22,7 +21,7 @@ pub enum Rotation{
     Counterclockwise, // Против часовой
 }
 
-struct Space<T>{
+pub struct Space<T>{
     space: Vec<Vec<Option<T>>>,
     w: usize,
     h: usize,
@@ -279,7 +278,7 @@ impl Desk {
         // But I'm writing this at 3 a.m. so it's acceptable
         let mut ret = false;
         for x in 0..self.w {
-            if let Some((c, s)) = self.space[self.h-1][x]{
+            if let Some((c, _)) = self.space[self.h-1][x]{
                 self.space[self.h-1][x] = Some((c, false))
             }
         }
@@ -324,7 +323,6 @@ impl Desk {
             }
         }
         if ret { return true }
-        // Fall all other
         for y in (1..self.h).rev() {
             let mut void = true;
             for x in 0..self.w {
@@ -536,7 +534,7 @@ fn main() {
                 }
             }
         }
-        if desk.get_content_heigth() >= desk.get_height() {
+        if desk.get_content_heigth() >= desk.get_height()/2 {
             desk = Desk::new(10,20);
             score = 0;
         }else{
