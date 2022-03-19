@@ -17,8 +17,8 @@ use std::time::Duration;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Rotation{
-    Clockwise, // По часовой
-    Counterclockwise, // Против часовой
+    Clockwise,
+    Counterclockwise,
 }
 
 pub struct Space<T>{
@@ -157,17 +157,21 @@ impl<T: std::clone::Clone> Space<T>{
     }
     pub fn get_rotated(&self, rotation: Rotation, count: usize) -> Self{
         if count % 4 == 0 {return self.clone()}
-        let mut rotated = Self::new(self.h,self.w);
-        for x in 0..self.w {
-            for y in 0..self.h {
-                if let Rotation::Clockwise = rotation {
-                    rotated.space[x][self.h-1-y] = self.space[y][x].clone();
-                }else{
-                    rotated.space[self.w-1-x][y] = self.space[y][x].clone();
+        let mut result = self.clone();
+        for _ in 0..count{
+            let mut rotated = Self::new(result.h,result.w);
+            for x in 0..result.w {
+                for y in 0..result.h {
+                    if let Rotation::Clockwise = rotation {
+                        rotated.space[x][result.h-1-y] = result.space[y][x].clone();
+                    }else{
+                        rotated.space[result.w-1-x][y] = result.space[y][x].clone();
+                    }
                 }
             }
+            result = rotated;
         }
-        rotated
+        result
     }
 }
 
@@ -379,13 +383,6 @@ impl Desk {
     }
 }
 
-fn get_b_shape(color: Colors) -> Desk {
-    let color = Some((color, true));
-    let mut shape = Desk::new(1,1);
-    shape.set_no_err(0, 0, color);
-    shape
-}
-
 fn get_i_shape(color: Colors) -> Desk {
     let color = Some((color, true));
     let mut shape = Desk::new(1,4);
@@ -500,57 +497,98 @@ fn render<O: Write + ?Sized>(out: &mut O, desk: &Desk, x: usize, y: usize, exten
     Ok(())
 }
 
-fn main() {
-    let mut rng = StdRng::seed_from_u64(11);
-    let desk = Desk::new(10,10);
-    let duration = Duration::from_millis(100);
+struct Field{
+    x: u16,
+    y: u16,
+    desk: Desk,
+}
+
+fn render_fields<O: Write + ?Sized>(out: &mut O, fields: &Vec<Field>, extended: bool) -> crossterm::Result<()>{
+    let mut ax = 0;
+    for field in fields {
+        render(out, &field.desk.get_rotated(Rotation::Clockwise, ax), field.x as usize, field.y as usize, extended)?;
+        ax += 1;
+    }
+    Ok(())
+}
+
+fn run(mut fields_count: u8, height: u16, mut width: u16, seed: u64, extended_render: bool, delay: u64)  -> crossterm::Result<usize> {
+    if fields_count > 4 { fields_count = 4; }
+    if fields_count < 1 { return Ok(0) }
+    if width > height { width = height }
+    let real_width = width;
+    let real_height = height + width;
+    let mut fields: Vec::<Field> = Vec::new();
+    let total_h = if fields_count > 2 { real_height + height } else { real_height };
+    let mut rng = StdRng::seed_from_u64(seed);
+    let duration = Duration::from_millis(delay);
+    let mut score: usize = 0;
+    let mut max_score: usize = 0;
     //
     let mut stdout = stdout();
-    stdout.execute(cursor::Hide).unwrap();
-    terminal::enable_raw_mode().unwrap();
-    let (x, y) = cursor::position().unwrap();
-    for _ in 0..desk.get_height() { print!("\n"); }
+    stdout.execute(cursor::Hide)?;
+    terminal::enable_raw_mode()?;
+    let (_, cy) = cursor::position()?;
+    let sy = if total_h > cy { 0 } else { cy - total_h };
+    for _ in 0..total_h { print!("\n"); }
     //
+    for i in 0..fields_count {
+        let x: u16 = if i < 3 && fields_count > 3 { height*2 } else { 0 };
+        let y: u16 = sy + match i {
+            0 => { if fields_count > 2 { height } else { 0 } }
+            1 => { if fields_count > 2 { height } else { 0 } }
+            2 => { 0 }
+            _ => { height }
+        };
+        fields.push(Field{x, y, desk: Desk::new(real_width as usize, real_height as usize)});
+    }
+    let score_x = fields[0].x+width*2+1;
+    let score_y = fields[0].y+if fields_count > 1 { width+1 } else { 0 };
+    //
+    render_fields(&mut stdout, &fields, extended_render)?;
+    stdout.queue(cursor::MoveTo(score_x  as u16 , score_y as u16 ))?;
+    stdout.queue(style::Print(format!("score: {:?} max: {:?}", score, max_score)))?;
+    stdout.flush()?;
     'outer: loop {
         let color = Colors::get_random(&mut rng);
-        let ax = rng.gen_range(0..4) ;
-        let mut shape = get_random_shape(&mut rng, color).get_rotated(Rotation::Clockwise, ax);
-        let (mut xx, mut yy) = (rng.gen_range(0..10),rng.gen_range(0..10));
+        let mut shape = get_random_shape(&mut rng, color);
+        let (mut shape_x, mut shape_y) = (rng.gen_range(0..width as usize),rng.gen_range(0..width as usize));
         let mut change = true;
+        let mut select_desk = Desk::new(width as usize, width as usize);
         loop{
             if change {
-                let mut d = desk.clone();
-                let a = d.copy_in_with_bounds(xx, yy, shape.clone());
-                xx = a.0;
-                yy = a.1;
-                render(&mut stdout, &d, x as usize, y as usize - d.get_height(), true).unwrap();
-                stdout.flush().unwrap();
+                select_desk = Desk::new(width as usize, width as usize);
+                let a = select_desk.copy_in_with_bounds(shape_x, shape_y, shape.clone());
+                shape_x = a.0;
+                shape_y = a.1;
+                render(&mut stdout, &select_desk, fields[0].x as usize, fields[0].y as usize, extended_render)?;
+                stdout.flush()?;
                 change = false;
             }
-            if poll(duration).unwrap() {
-                match read().unwrap() {
+            if poll(duration)? {
+                match read()? {
                     Event::Key(event) => {
                         match event.code {
                             KeyCode::Esc => { break 'outer; }
                             KeyCode::Char(' ') => { break }
                             KeyCode::Char('a') => {
-                                if xx > 0 {
-                                    xx -= 1;
+                                if shape_x > 0 {
+                                    shape_x -= 1;
                                     change = true;
                                 }
                             }
                             KeyCode::Char('d') => {
-                                xx += 1;
+                                shape_x += 1;
                                 change = true;
                             }
                             KeyCode::Char('w') => {
-                                if yy > 0 {
-                                    yy -= 1;
+                                if shape_y > 0 {
+                                    shape_y -= 1;
                                     change = true;
                                 }
                             }
                             KeyCode::Char('s') => {
-                                yy += 1;
+                                shape_y += 1;
                                 change = true;
                             }
                             KeyCode::Char('e') => {
@@ -568,61 +606,61 @@ fn main() {
                 }
             }
         }
-    }
-    //
-    stdout.queue(cursor::MoveTo(x  as u16 ,y as u16 )).unwrap();
-    terminal::disable_raw_mode().unwrap();
-    stdout.execute(cursor::Show).unwrap();
-    /*let mut rng = StdRng::seed_from_u64(11);
-    let color = Colors::get_random(&mut rng);
-    let ax = rng.gen_range(0..4) ;
-    let shape = get_random_shape(&mut rng, color).get_rotated(Rotation::Clockwise, ax);
-    let mut desk = Desk::new(10,20);
-    desk.copy_in_with_bounds(rng.gen_range(0..10),rng.gen_range(0..4),shape);
-    //
-    let mut stdout = stdout();
-    stdout.execute(cursor::Hide).unwrap();
-    terminal::enable_raw_mode().unwrap();
-    let (x, y) = cursor::position().unwrap();
-    for _ in 0..desk.get_height() {
-        print!("\n");
-    }
-    let d = Duration::from_millis(50);
-    //
-    let mut max_score: u64 = 0;
-    let mut score: u64 = 0;
-    'outer: loop {
-        while desk.step() {
-            render(&mut stdout, &desk, x as usize, y as usize - desk.get_height(), true).unwrap();
-            stdout.queue(cursor::MoveTo(x+(desk.get_width()*2) as u16, y-desk.get_height() as u16)).unwrap();
-            stdout.queue(style::Print(format!("score {:?}", score))).unwrap();
-            stdout.queue(cursor::MoveTo(x+(desk.get_width()*2) as u16, y+1-desk.get_height() as u16)).unwrap();
-            stdout.queue(style::Print(format!("max   {:?}", max_score))).unwrap();
-            stdout.flush().unwrap();
-            if poll(d).unwrap() {
-                match read().unwrap() {
-                    Event::Key(_) => {break 'outer;}
-                    _ => {}
+        //
+        let mut ax = 0;
+        let mut end = false;
+        for field in &mut fields {
+            let lax = match ax {
+                1 => { 3 }
+                3 => { 1 }
+                _ => { ax }
+            };
+            field.desk.copy_in_with_bounds(0,0, select_desk.get_rotated(Rotation::Counterclockwise, lax));
+            while field.desk.step() {
+                render(&mut stdout, &field.desk.get_rotated(Rotation::Clockwise, lax), field.x as usize, field.y as usize, extended_render)?;
+                stdout.flush()?;
+                if poll(duration)? {
+                    match read().unwrap() {
+                        Event::Key(event) => {
+                            match event.code {
+                                KeyCode::Esc => { break 'outer; }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
+            if field.desk.get_content_heigth() >= height as usize {
+                end = true;
+            }
+            ax += 1;
         }
-        if desk.get_content_heigth() >= desk.get_height()/2 {
-            desk = Desk::new(10,20);
+        if end {
             score = 0;
+            for i in 0..fields.len() {
+                fields[i].desk = Desk::new(fields[i].desk.w, fields[i].desk.h);
+            }
+            render_fields(&mut stdout, &fields, extended_render)?;
         }else{
             score += 1;
             if score > max_score {
                 max_score = score;
             }
         }
-        let color = Colors::get_random(&mut rng);
-        let ax = rng.gen_range(0..4) ;
-        let shape = get_random_shape(&mut rng, color).get_rotated(Rotation::Clockwise, ax);
-        //let shape = get_b_shape(color).get_rotated(Rotation::Clockwise, ax);
-        desk.copy_in_with_bounds(rng.gen_range(0..10),rng.gen_range(0..4),shape);
+        stdout.queue(cursor::MoveTo(score_x  as u16 , score_y as u16 ))?;
+        stdout.queue(style::Print(format!("score: {:?} max: {:?}", score, max_score)))?;
+        stdout.flush()?;
     }
     //
-    stdout.queue(cursor::MoveTo(x  as u16 ,y as u16 )).unwrap();
-    terminal::disable_raw_mode().unwrap();
-    stdout.execute(cursor::Show).unwrap();*/
+    stdout.queue(cursor::MoveTo(0 , cy))?;
+    terminal::disable_raw_mode()?;
+    stdout.execute(cursor::Show)?;
+    Ok(score)
+}
+
+fn main() {
+    if let Err(err) = run(4, 10, 10, 112345, true, 10) {
+        print!("{:?}", err);
+    }
 }
