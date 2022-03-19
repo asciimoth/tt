@@ -13,7 +13,7 @@ use crossterm::{
 use crossterm::event::{poll, read, Event, KeyCode};
 
 use std::time::Duration;
-
+use clap::Parser;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Rotation{
@@ -512,7 +512,7 @@ fn render_fields<O: Write + ?Sized>(out: &mut O, fields: &Vec<Field>, extended: 
     Ok(())
 }
 
-fn run(mut fields_count: u8, height: u16, mut width: u16, seed: u64, extended_render: bool, delay: u64)  -> crossterm::Result<usize> {
+fn run(mut fields_count: u8, mut width: u16, height: u16, seed: u64, extended_render: bool, delay: u64)  -> crossterm::Result<usize> {
     if fields_count > 4 { fields_count = 4; }
     if fields_count < 1 { return Ok(0) }
     if width > height { width = height }
@@ -649,6 +649,8 @@ fn run(mut fields_count: u8, height: u16, mut width: u16, seed: u64, extended_re
             }
         }
         stdout.queue(cursor::MoveTo(score_x  as u16 , score_y as u16 ))?;
+        stdout.queue(style::Print("                                                 "))?;
+        stdout.queue(cursor::MoveTo(score_x  as u16 , score_y as u16 ))?;
         stdout.queue(style::Print(format!("score: {:?} max: {:?}", score, max_score)))?;
         stdout.flush()?;
     }
@@ -659,8 +661,39 @@ fn run(mut fields_count: u8, height: u16, mut width: u16, seed: u64, extended_re
     Ok(score)
 }
 
+#[derive(Parser, Debug)]
+#[clap(author, version, about = include_str!("about.txt"), long_about = None)]
+struct Args {
+    /// Count of feelds
+    #[clap(short, long, default_value_t = 4)]
+    fields: u8,
+
+    /// Field width
+    #[clap(short, long, default_value_t = 10)]
+    width: u16,
+
+    /// Field height
+    #[clap(short, long, default_value_t = 10)]
+    height: u16,
+
+    /// PRNG seed
+    #[clap(short, long, default_value_t = 12345)]
+    seed: u64,
+
+    /// Render delay
+    #[clap(short, long, default_value_t = 10)]
+    delay: u64,
+}
+
 fn main() {
-    if let Err(err) = run(4, 10, 10, 112345, true, 10) {
+    let args = Args::parse();
+    if let Err(err) = run(
+        args.fields,
+        args.width,
+        args.height,
+        args.seed,
+        true,
+        args.delay) {
         print!("{:?}", err);
     }
 }
