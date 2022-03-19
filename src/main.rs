@@ -533,12 +533,14 @@ fn run(mut fields_count: u8, mut width: u16, height: u16, seed: u64, extended_re
     let mut score: usize = 0;
     let mut max_score: usize = 0;
     //
+    for _ in 0..total_h { 
+        print!("                                                             \n"); 
+    }
     let mut stdout = stdout();
     stdout.execute(cursor::Hide)?;
     terminal::enable_raw_mode()?;
     let (_, cy) = cursor::position()?;
     let sy = if total_h > cy { 0 } else { cy - total_h };
-    for _ in 0..total_h { print!("\n"); }
     //
     for i in 0..fields_count {
         let x: u16 = if i < 3 && fields_count > 3 { height*2 } else { 0 };
@@ -663,7 +665,7 @@ fn run(mut fields_count: u8, mut width: u16, height: u16, seed: u64, extended_re
         stdout.flush()?;
     }
     //
-    stdout.queue(cursor::MoveTo(0 , cy))?;
+    stdout.queue(cursor::MoveTo(0 , fields[0].y+real_height+1))?;
     terminal::disable_raw_mode()?;
     stdout.execute(cursor::Show)?;
     Ok(score)
