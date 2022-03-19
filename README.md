@@ -46,6 +46,6 @@ Files in this repository are distributed under the CC0 license.
      href="https://github.com/DomesticMoth">
     <span property="dct:title">DomesticMoth</span></a>
   has waived all copyright and related or neighboring rights to
-  <span property="dct:title">3a_storage</span>.
+  <span property="dct:title">tt</span>.
 </p>
 
