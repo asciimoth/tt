@@ -533,9 +533,7 @@ fn run(mut fields_count: u8, mut width: u16, height: u16, seed: u64, extended_re
     let mut score: usize = 0;
     let mut max_score: usize = 0;
     //
-    for _ in 0..total_h { 
-        print!("                                                             \n"); 
-    }
+    for _ in 0..total_h { print!("\n"); }
     let mut stdout = stdout();
     stdout.execute(cursor::Hide)?;
     terminal::enable_raw_mode()?;
