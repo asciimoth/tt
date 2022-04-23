@@ -9,7 +9,7 @@ Written in rust!
 ```
 $ git clone https://github.com/DomesticMoth/tt.git
 $ cd tt
-$ cargo build --release --offline
+$ cargo build --release
 $ cp ./target/release/tt /usr/bin/tt
 ```
 
