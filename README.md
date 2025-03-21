@@ -1,5 +1,5 @@
 # Terminal Tetris
-![screenshot](https://i.imgur.com/VnZX2RC.png)  
+[![asciicast](https://asciinema.org/a/709161.svg)](https://asciinema.org/a/709161)  
 Terminal implementation of the most popular game in the world - Tetris.  
 Now with simultaneous play on multiple surfaces.  
 Written in rust!
